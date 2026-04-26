@@ -97,7 +97,32 @@ for (let y = 0; y < SIZE; y++) {
   }
 }
 
-const outPath = path.join(__dirname, '..', 'build', 'icon.png');
-fs.mkdirSync(path.dirname(outPath), { recursive: true });
-fs.writeFileSync(outPath, makePNG(pixels));
+const buildDir = path.join(__dirname, '..', 'build');
+fs.mkdirSync(buildDir, { recursive: true });
+
+const pngData = makePNG(pixels);
+const outPath = path.join(buildDir, 'icon.png');
+fs.writeFileSync(outPath, pngData);
 console.log('✓ Icon generated:', outPath);
+
+// Generate icon.ico by wrapping the PNG in an ICO container.
+// Windows ICO format supports embedded PNG for 256x256 (Vista+).
+const icoHeader = Buffer.alloc(6);
+icoHeader.writeUInt16LE(0, 0);  // reserved
+icoHeader.writeUInt16LE(1, 2);  // type: 1 = icon
+icoHeader.writeUInt16LE(1, 4);  // count: 1 image
+
+const imgOffset = 6 + 16; // header + one directory entry
+const dirEntry = Buffer.alloc(16);
+dirEntry[0] = 0;           // width: 0 = 256
+dirEntry[1] = 0;           // height: 0 = 256
+dirEntry[2] = 0;           // color count
+dirEntry[3] = 0;           // reserved
+dirEntry.writeUInt16LE(1, 4);  // planes
+dirEntry.writeUInt16LE(32, 6); // bit count
+dirEntry.writeUInt32LE(pngData.length, 8);  // size of image data
+dirEntry.writeUInt32LE(imgOffset, 12);      // offset of image data
+
+const icoPath = path.join(buildDir, 'icon.ico');
+fs.writeFileSync(icoPath, Buffer.concat([icoHeader, dirEntry, pngData]));
+console.log('✓ ICO generated:', icoPath);
