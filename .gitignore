@@ -1,4 +1,12 @@
 node_modules/
 dist/
 release/
+build/icon.png
+build/icon.ico
 .DS_Store
+
+# Environment / secrets — never commit
+.env
+.env.local
+.env.*.local
+.vercel

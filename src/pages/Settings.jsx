@@ -11,13 +11,13 @@ const DEFAULT = {
 
 export default function Settings() {
   const [s, setS] = useState(() => {
-    try { return { ...DEFAULT, ...JSON.parse(localStorage.getItem('pcscanfix_settings') || '{}') }; }
+    try { return { ...DEFAULT, ...JSON.parse(localStorage.getItem('pcfixscan_settings') || '{}') }; }
     catch { return DEFAULT; }
   });
   const [saved, setSaved] = useState(false);
 
   function save() {
-    localStorage.setItem('pcscanfix_settings', JSON.stringify(s));
+    localStorage.setItem('pcfixscan_settings', JSON.stringify(s));
     window.electronAPI?.saveSettings(s);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -110,7 +110,7 @@ export default function Settings() {
       </div>
 
       <div className="card" style={{ marginTop: 24 }}>
-        <div style={{ fontWeight: 600, marginBottom: 10 }}>About PCScanFix</div>
+        <div style={{ fontWeight: 600, marginBottom: 10 }}>About PCFixScan</div>
         <div style={{ color: 'var(--muted)', fontSize: '0.84rem', lineHeight: 1.7 }}>
           <div>Version 1.0.0 · {window.electronAPI?.platform === 'darwin' ? 'macOS' : 'Windows'}</div>
           <div style={{ marginTop: 8 }}>
@@ -120,21 +120,21 @@ export default function Settings() {
           <div style={{ marginTop: 10 }}>
             <span
               style={{ color: 'var(--primary)', cursor: 'pointer', textDecoration: 'underline' }}
-              onClick={() => window.electronAPI?.openURL('https://pcscanfix.com')}
+              onClick={() => window.electronAPI?.openURL('https://pcfixscan.com')}
             >
-              pcscanfix.com
+              pcfixscan.com
             </span>
             {' '}·{' '}
             <span
               style={{ color: 'var(--primary)', cursor: 'pointer', textDecoration: 'underline' }}
-              onClick={() => window.electronAPI?.openURL('https://pcscanfix.com/support')}
+              onClick={() => window.electronAPI?.openURL('https://pcfixscan.com/support')}
             >
               Support
             </span>
             {' '}·{' '}
             <span
               style={{ color: 'var(--primary)', cursor: 'pointer', textDecoration: 'underline' }}
-              onClick={() => window.electronAPI?.openURL('https://pcscanfix.com/buy')}
+              onClick={() => window.electronAPI ? window.electronAPI.openURL('https://pcfixscan.com/buy') : (window.location.href = '/buy')}
             >
               Purchase License
             </span>

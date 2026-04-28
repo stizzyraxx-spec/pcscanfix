@@ -8,78 +8,6 @@ function fmt(bytes) {
   return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${u[i]}`;
 }
 
-function PaywallModal({ onClose }) {
-  return (
-    <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
-    }}>
-      <div className="card" style={{ width: 440, padding: 32, position: 'relative' }}>
-        <button onClick={onClose} style={{
-          position: 'absolute', top: 16, right: 16, background: 'none',
-          border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: '1.1rem', lineHeight: 1,
-        }}>x</button>
-
-        <div style={{
-          width: 48, height: 48, background: 'var(--primary-light)', borderRadius: 12,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 20,
-        }}>
-          <div style={{ width: 24, height: 24, background: 'var(--primary)', borderRadius: 6 }} />
-        </div>
-
-        <div style={{ fontWeight: 700, fontSize: '1.2rem', marginBottom: 8 }}>
-          Activate PCScanFix to Clean
-        </div>
-        <div style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', lineHeight: 1.6, marginBottom: 24 }}>
-          Scanning is free. To remove junk files, browser cache, and other items found during your scan,
-          you need an active PCScanFix license.
-        </div>
-
-        <div className="card" style={{ background: 'var(--primary-light)', border: '1px solid var(--primary)', marginBottom: 24, padding: 20 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <span style={{ fontWeight: 600, color: 'var(--primary)' }}>Full License</span>
-            <span style={{ fontWeight: 800, fontSize: '1.3rem', color: 'var(--primary)' }}>$49</span>
-          </div>
-          <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.7 }}>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
-              <span style={{ color: 'var(--success)', fontWeight: 700 }}>+</span>
-              One-time installation fee
-            </div>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
-              <span style={{ color: 'var(--success)', fontWeight: 700 }}>+</span>
-              Unlimited file cleaning
-            </div>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
-              <span style={{ color: 'var(--success)', fontWeight: 700 }}>+</span>
-              $7.99/month — automatic scheduled scans and notifications
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <span style={{ color: 'var(--success)', fontWeight: 700 }}>+</span>
-              Mac and Windows covered on one license
-            </div>
-          </div>
-        </div>
-
-        <button
-          className="btn btn-primary"
-          style={{ width: '100%', justifyContent: 'center', fontSize: '0.95rem', padding: '11px 0' }}
-          onClick={() => window.electronAPI?.openURL('https://pcscanfix.com/buy')}
-        >
-          Purchase License — $49
-        </button>
-        <div style={{ textAlign: 'center', marginTop: 10, color: 'var(--muted)', fontSize: '0.78rem' }}>
-          Cancel anytime. $7.99/mo billed monthly after activation.{' '}
-          <span
-            style={{ color: 'var(--primary)', cursor: 'pointer', textDecoration: 'underline' }}
-            onClick={() => window.electronAPI?.openURL('https://pcscanfix.com')}
-          >
-            pcscanfix.com
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function FileRow({ item, checked, onToggle, onOpen }) {
   return (
@@ -122,7 +50,6 @@ export default function Results({ scanResults }) {
   const [selected, setSelected] = useState({});
   const [cleaning, setCleaning] = useState(false);
   const [done, setDone] = useState(null);
-  const [showPaywall, setShowPaywall] = useState(false);
   const navigate = useNavigate();
 
   // Auto-select junk and browser files when scan results arrive
@@ -173,8 +100,14 @@ export default function Results({ scanResults }) {
 
   async function clean() {
     if (!selectedPaths.length) return;
-    // Show paywall instead of cleaning
-    setShowPaywall(true);
+    setCleaning(true);
+    try {
+      const result = await window.electronAPI.cleanFiles(selectedPaths, selectedSize);
+      setDone(result);
+      setSelected({});
+    } finally {
+      setCleaning(false);
+    }
   }
 
   function renderList(items) {
@@ -193,8 +126,6 @@ export default function Results({ scanResults }) {
 
   return (
     <div>
-      {showPaywall && <PaywallModal onClose={() => setShowPaywall(false)} />}
-
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <h1 className="page-title" style={{ marginBottom: 0 }}>Scan Results</h1>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>

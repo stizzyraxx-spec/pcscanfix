@@ -1,22 +1,21 @@
-// Generates build/icon.png (512x512) — run with: node scripts/generate-icon.cjs
-const fs = require('fs');
+// Generates build/icon.png (512x512), build/icon.ico, and public/og-image.png
+// Icon matches the TopNav SVG computer logo exactly
+const fs   = require('fs');
 const path = require('path');
 const zlib = require('zlib');
 
-const SIZE = 512;
-
-function makePNG(pixels) {
-  const rowLen = SIZE * 4;
-  const raw = Buffer.alloc((rowLen + 1) * SIZE);
-  for (let y = 0; y < SIZE; y++) {
+// ─── PNG encoder ─────────────────────────────────────────────────────────────
+function encodePNGRect(pixels, w, h) {
+  const rowLen = w * 4;
+  const raw = Buffer.alloc((rowLen + 1) * h);
+  for (let y = 0; y < h; y++) {
     raw[y * (rowLen + 1)] = 0;
     pixels.copy(raw, y * (rowLen + 1) + 1, y * rowLen, (y + 1) * rowLen);
   }
   const deflated = zlib.deflateSync(raw);
-
-  function crc32(buf) {
+  function crc32(b) {
     let c = 0xFFFFFFFF;
-    for (const b of buf) { c ^= b; for (let i = 0; i < 8; i++) c = c & 1 ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1); }
+    for (const byte of b) { c ^= byte; for (let i = 0; i < 8; i++) c = c & 1 ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1); }
     return (c ^ 0xFFFFFFFF) >>> 0;
   }
   function chunk(type, data) {
@@ -26,103 +25,144 @@ function makePNG(pixels) {
     return Buffer.concat([len, t, data, crc]);
   }
   const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(SIZE, 0); ihdr.writeUInt32BE(SIZE, 4); ihdr[8] = 8; ihdr[9] = 6;
+  ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = 6;
   return Buffer.concat([
     Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
     chunk('IHDR', ihdr), chunk('IDAT', deflated), chunk('IEND', Buffer.alloc(0)),
   ]);
 }
 
-function inShield(x, y) {
-  const cx = SIZE / 2, cy = SIZE / 2;
-  const sx = (x - cx) / (SIZE * 0.40);
-  const sy = (y - cy) / (SIZE * 0.46);
-  if (sy < -1 || sy > 1.05) return false;
-  // Rounded rectangle top
-  if (sy <= 0.35) {
-    if (Math.abs(sx) > 1) return false;
-    if (sy < -0.75 && Math.abs(sx) > 0.72) {
-      const dx = Math.abs(sx) - 0.72, dy = sy + 0.75;
-      return Math.sqrt(dx * dx + dy * dy) <= 0.28;
-    }
-    return true;
+// ─── Drawing primitives ───────────────────────────────────────────────────────
+function makeCanvas(w, h) {
+  const buf = Buffer.alloc(w * h * 4, 0);
+  function px(x, y, r, g, b) {
+    x = Math.round(x); y = Math.round(y);
+    if (x < 0 || x >= w || y < 0 || y >= h) return;
+    const i = (y * w + x) * 4;
+    buf[i] = r; buf[i+1] = g; buf[i+2] = b; buf[i+3] = 255;
   }
-  // Tapered bottom to point
-  const t = (sy - 0.35) / 0.7;
-  return Math.abs(sx) <= 1 - t;
-}
-
-function inCheck(x, y) {
-  const cx = SIZE / 2, cy = SIZE * 0.48;
-  const nx = (x - cx) / (SIZE * 0.22);
-  const ny = (y - cy) / (SIZE * 0.22);
-  const thick = 0.28;
-  // Left arm: slope down-left to center
-  const lx = nx + 0.65, ly = ny - 0.2;
-  const proj = lx * 0.707 + ly * 0.707;
-  const perp = Math.abs(-lx * 0.707 + ly * 0.707);
-  const inLeft = proj >= 0 && proj <= 0.9 && perp <= thick && nx <= 0;
-  // Right arm: slope up-right from center
-  const rx = nx, ry = ny;
-  const proj2 = rx * 0.55 - ry * 0.835;
-  const perp2 = Math.abs(rx * 0.835 + ry * 0.55);
-  const inRight = proj2 >= 0 && proj2 <= 1.5 && perp2 <= thick && nx >= -0.1;
-  return inLeft || inRight;
-}
-
-const pixels = Buffer.alloc(SIZE * SIZE * 4);
-for (let y = 0; y < SIZE; y++) {
-  for (let x = 0; x < SIZE; x++) {
-    const idx = (y * SIZE + x) * 4;
-    if (!inShield(x, y)) { pixels[idx + 3] = 0; continue; }
-    // Indigo → purple gradient top to bottom
-    const t = y / SIZE;
-    const r = Math.round(99 + (139 - 99) * t);
-    const g = Math.round(102 + (92 - 102) * t);
-    const b = Math.round(241 + (246 - 241) * t);
-    // Subtle inner glow on left edge
-    const cx = SIZE / 2;
-    const glow = Math.max(0, 1 - Math.abs(x - cx * 0.65) / (SIZE * 0.25)) * 0.18;
-    pixels[idx]     = Math.min(255, Math.round(r + (255 - r) * glow));
-    pixels[idx + 1] = Math.min(255, Math.round(g + (255 - g) * glow));
-    pixels[idx + 2] = Math.min(255, Math.round(b + (255 - b) * glow));
-    pixels[idx + 3] = 255;
-    // White checkmark overlay
-    if (inCheck(x, y)) {
-      pixels[idx]     = 255;
-      pixels[idx + 1] = 255;
-      pixels[idx + 2] = 255;
-      pixels[idx + 3] = 240;
+  function rect(x1, y1, x2, y2, r, g, b) {
+    x1=Math.round(x1); y1=Math.round(y1); x2=Math.round(x2); y2=Math.round(y2);
+    for (let y = y1; y < y2; y++)
+      for (let x = x1; x < x2; x++) px(x, y, r, g, b);
+  }
+  function rrect(x1, y1, x2, y2, rad, r, g, b) {
+    x1=Math.round(x1); y1=Math.round(y1); x2=Math.round(x2); y2=Math.round(y2);
+    rad = Math.round(rad);
+    for (let y = y1; y < y2; y++) {
+      for (let x = x1; x < x2; x++) {
+        if      (x < x1+rad && y < y1+rad) { const dx=x-(x1+rad), dy=y-(y1+rad); if (dx*dx+dy*dy > rad*rad) continue; }
+        else if (x >= x2-rad && y < y1+rad) { const dx=x-(x2-rad-1), dy=y-(y1+rad); if (dx*dx+dy*dy > rad*rad) continue; }
+        else if (x < x1+rad && y >= y2-rad) { const dx=x-(x1+rad), dy=y-(y2-rad-1); if (dx*dx+dy*dy > rad*rad) continue; }
+        else if (x >= x2-rad && y >= y2-rad) { const dx=x-(x2-rad-1), dy=y-(y2-rad-1); if (dx*dx+dy*dy > rad*rad) continue; }
+        px(x, y, r, g, b);
+      }
     }
   }
+  function circle(cx, cy, rad, r, g, b) {
+    cx=Math.round(cx); cy=Math.round(cy); rad=Math.round(rad);
+    for (let y = cy-rad; y <= cy+rad; y++)
+      for (let x = cx-rad; x <= cx+rad; x++)
+        if ((x-cx)**2 + (y-cy)**2 <= rad*rad) px(x, y, r, g, b);
+  }
+  return { buf, rect, rrect, circle };
 }
 
-const buildDir = path.join(__dirname, '..', 'build');
-fs.mkdirSync(buildDir, { recursive: true });
+// ─── Render TopNav SVG logo at a given scale + offset ─────────────────────────
+// Source SVG viewBox: 0 0 24 24
+function renderLogo(canvas, scale, ox, oy) {
+  const { rect, rrect, circle } = canvas;
+  const f = x => x * scale + ox;
+  const g = y => y * scale + oy;
+  const s = v => v * scale;
 
-const pngData = makePNG(pixels);
-const outPath = path.join(buildDir, 'icon.png');
-fs.writeFileSync(outPath, pngData);
-console.log('✓ Icon generated:', outPath);
+  // Monitor body — #D4D0C8
+  rrect(f(1), g(2), f(23), g(16), s(1.5), 212, 208, 200);
 
-// Generate icon.ico by wrapping the PNG in an ICO container.
-// Windows ICO format supports embedded PNG for 256x256 (Vista+).
+  // Top-edge highlight — #EEE8E0 at 0.8 opacity blended over #D4D0C8
+  rrect(f(2), g(2.5), f(22), g(3.5), s(0.5), 233, 227, 219);
+
+  // Screen — #001628
+  rect(f(3), g(4), f(21), g(14), 0, 22, 40);
+
+  // Text line 1 — #00DC3C at 0.9 opacity
+  rect(f(4.5), g(6), f(17.5), g(7.2), 0, 200, 57);
+
+  // Text line 2
+  rect(f(4.5), g(9.5), f(14.5), g(10.7), 0, 200, 57);
+
+  // Cursor block
+  rect(f(15.5), g(9.5), f(17), g(10.7), 0, 220, 60);
+
+  // Power LED — #00F050
+  circle(f(20.5), g(15), s(0.9), 0, 240, 80);
+
+  // Stand neck — #B8B4AE
+  rect(f(10), g(16), f(14), g(19.5), 184, 180, 174);
+
+  // Base — #C4C0BA
+  rrect(f(7), g(19.5), f(17), g(21.5), s(0.5), 196, 192, 186);
+}
+
+// ─── 512×512 app icon ────────────────────────────────────────────────────────
+const SIZE = 512;
+const icon = makeCanvas(SIZE, SIZE);
+
+// Rounded blue background (#0078D4)
+icon.rrect(0, 0, SIZE, SIZE, 76, 0, 120, 212);
+
+// Logo centered: SVG center ≈ (12, 11.75), canvas center = 256
+const SCALE = 20;
+const OX = 256 - 12 * SCALE;      // 16
+const OY = 256 - 11.75 * SCALE;   // 21
+renderLogo(icon, SCALE, OX, OY);
+
+const iconPng = encodePNGRect(icon.buf, SIZE, SIZE);
+
+// ─── 1200×630 OG social preview ───────────────────────────────────────────────
+const OG_W = 1200, OG_H = 630;
+const og = makeCanvas(OG_W, OG_H);
+
+// Blue background
+og.rect(0, 0, OG_W, OG_H, 0, 120, 212);
+
+// Subtle darker panel behind logo
+og.rrect(OG_W/2 - 260, OG_H/2 - 220, OG_W/2 + 260, OG_H/2 + 220, 32, 0, 96, 180);
+
+// Logo at scale=28, centered
+const OG_SCALE = 28;
+const OG_OX = OG_W/2 - 12 * OG_SCALE;
+const OG_OY = OG_H/2 - 11.75 * OG_SCALE;
+renderLogo(og, OG_SCALE, OG_OX, OG_OY);
+
+const ogPng = encodePNGRect(og.buf, OG_W, OG_H);
+
+// ─── Write files ─────────────────────────────────────────────────────────────
+const buildDir  = path.join(__dirname, '..', 'build');
+const publicDir = path.join(__dirname, '..', 'public');
+fs.mkdirSync(buildDir,  { recursive: true });
+fs.mkdirSync(publicDir, { recursive: true });
+
+fs.writeFileSync(path.join(buildDir,  'icon.png'), iconPng);
+console.log('✓ build/icon.png (512×512)');
+
+fs.copyFileSync(path.join(buildDir, 'icon.png'), path.join(publicDir, 'icon.png'));
+console.log('✓ public/icon.png');
+
+fs.writeFileSync(path.join(publicDir, 'og-image.png'), ogPng);
+console.log('✓ public/og-image.png (1200×630)');
+
+// ICO (Vista+ embedded PNG)
 const icoHeader = Buffer.alloc(6);
-icoHeader.writeUInt16LE(0, 0);  // reserved
-icoHeader.writeUInt16LE(1, 2);  // type: 1 = icon
-icoHeader.writeUInt16LE(1, 4);  // count: 1 image
-
-const imgOffset = 6 + 16; // header + one directory entry
+icoHeader.writeUInt16LE(0, 0);
+icoHeader.writeUInt16LE(1, 2);
+icoHeader.writeUInt16LE(1, 4);
+const imgOffset = 6 + 16;
 const dirEntry = Buffer.alloc(16);
-dirEntry[0] = 0;           // width: 0 = 256
-dirEntry[1] = 0;           // height: 0 = 256
-dirEntry[2] = 0;           // color count
-dirEntry[3] = 0;           // reserved
-dirEntry.writeUInt16LE(1, 4);  // planes
-dirEntry.writeUInt16LE(32, 6); // bit count
-dirEntry.writeUInt32LE(pngData.length, 8);  // size of image data
-dirEntry.writeUInt32LE(imgOffset, 12);      // offset of image data
-
-const icoPath = path.join(buildDir, 'icon.ico');
-fs.writeFileSync(icoPath, Buffer.concat([icoHeader, dirEntry, pngData]));
-console.log('✓ ICO generated:', icoPath);
+dirEntry[0] = 0; dirEntry[1] = 0; dirEntry[2] = 0; dirEntry[3] = 0;
+dirEntry.writeUInt16LE(1, 4);
+dirEntry.writeUInt16LE(32, 6);
+dirEntry.writeUInt32LE(iconPng.length, 8);
+dirEntry.writeUInt32LE(imgOffset, 12);
+fs.writeFileSync(path.join(buildDir, 'icon.ico'), Buffer.concat([icoHeader, dirEntry, iconPng]));
+console.log('✓ build/icon.ico');

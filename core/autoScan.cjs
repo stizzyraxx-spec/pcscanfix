@@ -46,7 +46,7 @@ function start(win) {
 
       const totalSize = [...junk, ...browsers].reduce((s, f) => s + (f.size || 0), 0);
       if (totalSize > 50 * 1024 * 1024 && Notification.isSupported()) {
-        const n = new Notification({ title: 'PCScanFix', body: `Found ${fmt(totalSize)} ready to clean.` });
+        const n = new Notification({ title: 'PCFixScan', body: `Found ${fmt(totalSize)} ready to clean.` });
         n.on('click', () => { win?.show(); win?.focus(); win?.webContents.send('navigate', '/results'); });
         n.show();
       }

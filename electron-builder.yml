@@ -1,6 +1,6 @@
-appId: com.pcscanfix.app
-productName: PCScanFix
-copyright: Copyright © 2026 PCScanFix
+appId: com.pcfixscan.app
+productName: PCFixScan
+copyright: Copyright © 2026 PCFixScan
 
 directories:
   buildResources: build
@@ -13,21 +13,39 @@ files:
   - core/**/*.cjs
   - "!src/**/*"
   - "!scripts/**/*"
+  - "!api/**/*"
   - "!node_modules/.cache/**/*"
 
 asar: true
+
+# Auto-update target — point this at your distribution host. Default: GitHub Releases.
+# Set GH_TOKEN in CI; electron-builder reads `repository` from package.json.
+publish:
+  - provider: github
+    releaseType: release
 
 mac:
   category: public.app-category.utilities
   icon: build/icon.png
   darkModeSupport: true
-  hardenedRuntime: false
+  # hardenedRuntime + entitlements + notarize → required for distribution
+  # outside the App Store. macOS will refuse to launch unsigned apps.
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  # Notarization runs automatically when CSC_LINK + APPLE_ID + APPLE_APP_SPECIFIC_PASSWORD
+  # + APPLE_TEAM_ID are present in env. Leave commented until you have a Developer ID.
+  # notarize:
+  #   teamId: "${env.APPLE_TEAM_ID}"
   target:
     - target: dmg
       arch: [x64, arm64]
+    - target: zip
+      arch: [x64, arm64]
 
 dmg:
-  title: "PCScanFix ${version}"
+  title: "PCFixScan ${version}"
   background: null
   window:
     width: 540
@@ -43,19 +61,24 @@ dmg:
 
 win:
   icon: build/icon.ico
+  # Code-signing: set CSC_LINK (cert .pfx in base64) + CSC_KEY_PASSWORD in env.
+  # Without these, Windows SmartScreen flags the installer.
   target:
     - target: nsis
+      arch: [x64]
     - target: portable
+      arch: [x64]
 
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: PCScanFix
+  shortcutName: PCFixScan
   installerIcon: build/icon.ico
   uninstallerIcon: build/icon.ico
   installerHeaderIcon: build/icon.ico
+  differentialPackage: true
 
 linux:
   icon: build/icon.png

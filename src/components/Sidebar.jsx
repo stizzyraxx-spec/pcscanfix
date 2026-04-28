@@ -15,7 +15,7 @@ export default function Sidebar() {
     <aside style={s.sidebar}>
       <div style={s.brand}>
         <div style={s.logoMark} />
-        <span style={s.brandText}>PCScanFix</span>
+        <span style={s.brandText}>PCFixScan</span>
       </div>
 
       <div style={s.section}>MENU</div>

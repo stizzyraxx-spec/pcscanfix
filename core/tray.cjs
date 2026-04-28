@@ -76,9 +76,9 @@ function rebuild() {
   const [r, g, b] = iconColor(diskPct);
   const img = nativeImage.createFromBuffer(makePNG(r, g, b));
   tray.setImage(img);
-  tray.setToolTip(`PCScanFix  •  Disk: ${diskPct}%  •  RAM: ${memPct}%`);
+  tray.setToolTip(`PCFixScan  •  Disk: ${diskPct}%  •  RAM: ${memPct}%`);
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'PCScanFix', enabled: false },
+    { label: 'PCFixScan', enabled: false },
     { type: 'separator' },
     { label: 'Open', click: () => { _win?.show(); _win?.focus(); } },
     { label: 'Quick Scan', click: () => { _win?.show(); _win?.focus(); _win?.webContents.send('navigate', '/scanner'); _onScan?.(); } },

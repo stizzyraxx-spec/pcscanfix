@@ -15,6 +15,7 @@ const { createTray, destroyTray } = require('./core/tray.cjs');
 const { saveScanEntry, saveCleanEntry, getHistory, getStats } = require('./core/history.cjs');
 const { getInstalledApps, getAppLeftovers, getAppSize, uninstallApp } = require('./core/appUninstaller.cjs');
 const autoScan = require('./core/autoScan.cjs');
+const { setupAutoUpdater } = require('./core/updater.cjs');
 
 let mainWindow;
 
@@ -45,6 +46,7 @@ app.whenReady().then(() => {
   createWindow();
   createTray(mainWindow, () => mainWindow?.webContents.send('navigate', '/scanner'));
   autoScan.start(mainWindow);
+  setupAutoUpdater(mainWindow);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

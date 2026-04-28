@@ -48,9 +48,11 @@ function ScoreRing({ score }) {
   );
 }
 
-export default function Dashboard({ scanResults }) {
+export default function Dashboard({ scanResults, access }) {
   const [info, setInfo] = useState(null);
   const navigate = useNavigate();
+  const showBanner = access && access.reason === 'trial';
+  const licensed = access && (access.reason === 'admin' || access.reason === 'license');
 
   useEffect(() => {
     window.electronAPI?.getSystemInfo().then(setInfo).catch(() => {});
@@ -70,6 +72,30 @@ export default function Dashboard({ scanResults }) {
   return (
     <div>
       <h1 className="page-title">System Overview</h1>
+
+      {showBanner && (
+        <div style={{ background: 'linear-gradient(90deg, #0078d4, #005a9e)', borderRadius: 8, padding: '11px 20px', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#fff' }}>
+          <div>
+            <span style={{ fontWeight: 600, fontSize: '0.88rem' }}>
+              Trial — {access.daysLeft} day{access.daysLeft === 1 ? '' : 's'} left
+            </span>
+            <span style={{ fontSize: '0.8rem', marginLeft: 10, opacity: 0.85 }}>
+              Buy a license for unlimited scans and lifetime updates.
+            </span>
+          </div>
+          <button
+            onClick={() => window.electronAPI?.openURL('https://pcfixscan.com/buy') || navigate('/buy')}
+            style={{ background: '#fff', color: '#0078d4', border: 'none', borderRadius: 6, padding: '5px 16px', fontWeight: 600, cursor: 'pointer', fontSize: '0.8rem', flexShrink: 0, marginLeft: 16 }}
+          >
+            Buy — $19.99
+          </button>
+        </div>
+      )}
+      {licensed && access.reason === 'license' && (
+        <div style={{ background: '#e8f5e9', border: '1px solid #a5d6a7', borderRadius: 8, padding: '8px 16px', marginBottom: 16, fontSize: '0.82rem', color: '#1b5e20' }}>
+          ✓ Licensed — full version active
+        </div>
+      )}
 
       <div className="grid-2" style={{ marginBottom: 16 }}>
         <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 28 }}>

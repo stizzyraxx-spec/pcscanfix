@@ -1,9 +1,8 @@
-name: Build Installers
+name: Build & Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    tags: ['v*']
   workflow_dispatch:
 
 jobs:
@@ -16,13 +15,23 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
-      - run: npm run dist:mac
+      - name: Build & publish (Mac)
+        run: npm run dist:mac -- --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Code signing — uncomment after enrolling in Apple Developer Program
+          # CSC_LINK: ${{ secrets.MAC_CSC_LINK }}             # base64 of .p12
+          # CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          # APPLE_ID: ${{ secrets.APPLE_ID }}
+          # APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       - uses: actions/upload-artifact@v4
         with:
-          name: PCScanFix-mac
-          path: release/*.dmg
+          name: PCFixScan-mac
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/latest-mac.yml
           retention-days: 30
 
   build-win:
@@ -34,15 +43,18 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
-      - run: npm run dist:win
+      - name: Build & publish (Windows)
+        run: npm run dist:win -- --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          # CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
       - uses: actions/upload-artifact@v4
         with:
-          name: PCScanFix-windows
+          name: PCFixScan-windows
           path: |
             release/*.exe
-            release/*Setup*.exe
+            release/latest.yml
           retention-days: 30
 
   build-linux:
@@ -54,11 +66,14 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
-      - run: npm run dist:linux
+      - name: Build & publish (Linux)
+        run: npm run dist:linux -- --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/upload-artifact@v4
         with:
-          name: PCScanFix-linux
-          path: release/*.AppImage
+          name: PCFixScan-linux
+          path: |
+            release/*.AppImage
+            release/latest-linux.yml
           retention-days: 30
