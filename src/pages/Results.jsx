@@ -9,12 +9,31 @@ function fmt(bytes) {
 }
 
 
+const RISK_STYLE = {
+  safe:     { bg: '#e8f5e9', fg: '#1b5e20', label: 'Safe' },
+  review:   { bg: '#fff8e1', fg: '#7a5b00', label: 'Review' },
+  advanced: { bg: '#ffebee', fg: '#b71c1c', label: 'Advanced' },
+};
+
+function RiskBadge({ risk }) {
+  const r = RISK_STYLE[risk] || RISK_STYLE.safe;
+  return (
+    <span style={{
+      fontSize: '0.66rem', fontWeight: 700, padding: '2px 7px', borderRadius: 10,
+      background: r.bg, color: r.fg, textTransform: 'uppercase', letterSpacing: '0.04em',
+    }}>{r.label}</span>
+  );
+}
+
 function FileRow({ item, checked, onToggle, onOpen }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 0', borderBottom: '1px solid var(--border)', fontSize: '0.84rem' }}>
       <input type="checkbox" checked={checked} onChange={onToggle} style={{ accentColor: 'var(--primary)', width: 14, height: 14, cursor: 'pointer' }} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
+        <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 8 }}>
+          {item.name}
+          {item.risk && <RiskBadge risk={item.risk} />}
+        </div>
         <div style={{ color: 'var(--muted)', fontSize: '0.76rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.path}</div>
       </div>
       <div style={{ color: 'var(--muted)', whiteSpace: 'nowrap', minWidth: 56, textAlign: 'right' }}>{fmt(item.size)}</div>
@@ -52,11 +71,17 @@ export default function Results({ scanResults }) {
   const [done, setDone] = useState(null);
   const navigate = useNavigate();
 
-  // Auto-select junk and browser files when scan results arrive
+  // Auto-select junk and browser files when scan results arrive.
+  // Default: only auto-select 'safe' items. Advanced Mode auto-selects 'review' too;
+  // 'advanced' (e.g. Windows.old) is never auto-selected — always explicit user opt-in.
   useEffect(() => {
     if (!scanResults) return;
+    let advancedMode = false;
+    try { advancedMode = !!JSON.parse(localStorage.getItem('pcfixscan_settings') || '{}').advancedMode; } catch {}
     const auto = {};
-    (scanResults.junk || []).forEach(f => { auto[f.path] = true; });
+    (scanResults.junk || []).forEach(f => {
+      if (f.risk === 'safe' || (advancedMode && f.risk === 'review')) auto[f.path] = true;
+    });
     (scanResults.browsers || []).forEach(f => { auto[f.path] = true; });
     setSelected(auto);
     setDone(null);

@@ -24,12 +24,13 @@ export default function Buy() {
           <rect x="7" y="19.5" width="10" height="2" rx="0.5" fill="#C4C0BA"/>
         </svg>
 
-        <h1 style={s.title}>PCFixScan License</h1>
-        <p style={s.sub}>One-time purchase · Mac &amp; Windows · Lifetime updates</p>
+        <h1 style={s.title}>PCFixScan</h1>
+        <p style={s.sub}>Monthly subscription · Mac &amp; Windows · Cancel anytime</p>
 
         <div style={s.price}>
           <span style={s.dollars}>$19</span>
           <span style={s.cents}>.99</span>
+          <span style={{ fontSize: '0.95rem', color: '#666', marginLeft: 6 }}>/month</span>
         </div>
 
         <ul style={s.list}>
@@ -38,15 +39,15 @@ export default function Buy() {
           <li>Startup manager &amp; app uninstaller</li>
           <li>Malware heuristics scan</li>
           <li>Auto-scan scheduling</li>
-          <li>Free updates</li>
+          <li>All updates included</li>
         </ul>
 
         <button onClick={buy} disabled={loading} style={{ ...s.btn, opacity: loading ? 0.6 : 1 }}>
-          {loading ? 'Opening checkout…' : 'Buy now — $19.99'}
+          {loading ? 'Opening checkout…' : 'Subscribe — $19.99/month'}
         </button>
 
         <p style={s.foot}>
-          Secure checkout by Stripe · 30-day refund · Your license arrives by email instantly.
+          Secure checkout by Stripe · Cancel anytime in your account · License arrives by email instantly.
         </p>
 
         <div style={s.footer}>

@@ -1,22 +1,21 @@
-// POST /functions/v1/checkout
-// Creates a Stripe Checkout session and returns the URL.
-// If caller is authenticated, prefills email + tags metadata.user_id for the webhook.
+// POST /functions/v1/checkout — creates a Stripe Checkout subscription session
 import Stripe from 'https://esm.sh/stripe@17?target=deno';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders, jsonResponse, preflightOrNull } from '../_shared/cors.ts';
+import { jsonResponse, preflightOrNull } from '../_shared/cors.ts';
+import { checkRateLimit } from '../_shared/rate-limit.ts';
 
 const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!, { apiVersion: '2024-10-28.acacia' });
 
 Deno.serve(async (req) => {
   const pre = preflightOrNull(req); if (pre) return pre;
   if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
+  if (!checkRateLimit(req, 'checkout', 10, 60_000)) return jsonResponse({ error: 'Too many checkout attempts' }, 429);
 
   const priceId = Deno.env.get('STRIPE_PRICE_ID');
   if (!priceId) return jsonResponse({ error: 'STRIPE_PRICE_ID not configured' }, 500);
 
   const base = Deno.env.get('PUBLIC_URL') || 'https://pcfixscan.com';
 
-  // Try to identify the buyer if they're logged in
   let userEmail: string | null = null;
   let userId: string | null = null;
   const auth = req.headers.get('authorization');
@@ -33,17 +32,16 @@ Deno.serve(async (req) => {
 
   try {
     const params: Stripe.Checkout.SessionCreateParams = {
-      mode: 'payment',
-      payment_method_types: ['card'],
+      mode: 'subscription',
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: `${base}/buy/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${base}/buy`,
-      customer_creation: 'always',
+      cancel_url:  `${base}/buy`,
       allow_promotion_codes: true,
       billing_address_collection: 'auto',
     };
     if (userEmail) params.customer_email = userEmail;
     if (userId)    params.metadata = { user_id: userId };
+    if (userId)    params.subscription_data = { metadata: { user_id: userId } };
 
     const session = await stripe.checkout.sessions.create(params);
     return jsonResponse({ url: session.url });

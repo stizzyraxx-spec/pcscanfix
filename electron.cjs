@@ -2,6 +2,8 @@ const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('path');
 
 const isDev = !app.isPackaged;
+const REMOTE_URL = 'https://pcfixscan.com';
+let isQuitting = false;
 
 const { getSystemInfo } = require('./core/systemInfo.cjs');
 const { scanJunk } = require('./core/junkScanner.cjs');
@@ -16,6 +18,12 @@ const { saveScanEntry, saveCleanEntry, getHistory, getStats } = require('./core/
 const { getInstalledApps, getAppLeftovers, getAppSize, uninstallApp } = require('./core/appUninstaller.cjs');
 const autoScan = require('./core/autoScan.cjs');
 const { setupAutoUpdater } = require('./core/updater.cjs');
+const { getSnapshot, killProcess } = require('./core/performanceMonitor.cjs');
+const { scanPrivacy, clearPrivacy } = require('./core/privacyCleaner.cjs');
+const { scanRegistry, cleanRegistry, restoreBackup, listBackups } = require('./core/registryCleaner.cjs');
+const { getDiskHealth, analyzeDefrag } = require('./core/diskHealth.cjs');
+const { exportCSV, exportPDF } = require('./core/reports.cjs');
+const { listDeletions, clearDeletions } = require('./core/safety.cjs');
 
 let mainWindow;
 
@@ -26,8 +34,11 @@ function createWindow() {
     minWidth: 960,
     minHeight: 640,
     backgroundColor: '#f3f3f3',
-    titleBarStyle: 'hidden',
-    frame: false,
+    title: 'PCFixScan',
+    icon: path.join(__dirname, 'build', 'icon.png'),
+    // Native title bar — OS-standard close/min/max + drag region + app name.
+    // hiddenInset on Mac keeps the traffic lights but inset for a slightly cleaner look.
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -35,33 +46,72 @@ function createWindow() {
     },
   });
 
+  // Lock the title to "PCFixScan" — without this, the page <title> overwrites it
+  // (which would say "PCFixScan — Cross-platform PC Cleanup…")
+  mainWindow.on('page-title-updated', (e) => e.preventDefault());
+  mainWindow.setTitle('PCFixScan');
+
   if (isDev) {
     mainWindow.loadURL(process.env.ELECTRON_DEV_URL || 'http://localhost:5173');
   } else {
-    mainWindow.loadFile(path.join(__dirname, 'dist', 'index.html'));
+    // Production: load the live website. Any push to pcfixscan.com is instantly reflected.
+    // Local dist/index.html is the offline fallback only.
+    mainWindow.loadURL(REMOTE_URL).catch(() => {
+      mainWindow.loadFile(path.join(__dirname, 'dist', 'index.html'));
+    });
   }
+
+  // Closing the window hides it; only Quit (cmd+Q / tray menu) actually exits.
+  // App stays alive in background so auto-scan can run.
+  mainWindow.on('close', (e) => {
+    if (!isQuitting) {
+      e.preventDefault();
+      mainWindow.hide();
+      if (process.platform === 'darwin') app.dock?.hide();
+    }
+  });
 }
+
+// ─── Auto-launch on login (background by default) ─────────────────────────────
+function configureLoginItem(enabled = true) {
+  if (isDev) return; // never auto-launch in dev
+  app.setLoginItemSettings({
+    openAtLogin: enabled,
+    openAsHidden: true,                   // start in tray, no window
+    args: ['--hidden'],
+  });
+}
+
+// Single instance — second launch reveals the existing window
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) { app.quit(); }
+else app.on('second-instance', () => { mainWindow?.show(); mainWindow?.focus(); });
 
 app.whenReady().then(() => {
   createWindow();
+  configureLoginItem(true);
   createTray(mainWindow, () => mainWindow?.webContents.send('navigate', '/scanner'));
   autoScan.start(mainWindow);
   setupAutoUpdater(mainWindow);
 
+  // Hide window if launched with --hidden (auto-launch on login)
+  if (process.argv.includes('--hidden')) {
+    mainWindow.hide();
+    if (process.platform === 'darwin') app.dock?.hide();
+  }
+
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (mainWindow) { mainWindow.show(); mainWindow.focus(); }
+    else createWindow();
+    if (process.platform === 'darwin') app.dock?.show();
   });
 });
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    destroyTray();
-    autoScan.stop();
-    app.quit();
-  }
-});
+// App stays alive in background — never auto-quit on window close.
+app.on('window-all-closed', (e) => { e.preventDefault?.(); });
 
 app.on('before-quit', () => {
+  isQuitting = true;
   destroyTray();
   autoScan.stop();
 });
@@ -127,7 +177,51 @@ ipcMain.handle('uninstall:remove', async (event, { appInfo, leftoverPaths }) => 
 ipcMain.handle('shell:openPath', async (event, filePath) => shell.showItemInFolder(filePath));
 ipcMain.handle('shell:openURL', async (event, url) => shell.openExternal(url));
 
+// ── License expiry notification ────────────────────────────────────────────
+const { Notification } = require('electron');
+ipcMain.handle('license:expired', (event, reason) => {
+  const messages = {
+    expired:           'Your subscription has expired. Renew at pcfixscan.com to continue.',
+    revoked:           'Your license has been revoked. Contact support@pcfixscan.com.',
+    past_due_expired:  'Payment failed and the grace period ended. Update payment at pcfixscan.com/account.',
+  };
+  if (Notification.isSupported()) {
+    const n = new Notification({
+      title: 'PCFixScan subscription ended',
+      body:  messages[reason] || 'Your subscription is no longer active.',
+    });
+    n.on('click', () => shell.openExternal('https://pcfixscan.com/account'));
+    n.show();
+  }
+});
+
 // ── Window controls ────────────────────────────────────────────────────────
 ipcMain.handle('window:minimize', () => mainWindow?.minimize());
 ipcMain.handle('window:maximize', () => { mainWindow?.isMaximized() ? mainWindow.restore() : mainWindow?.maximize(); });
 ipcMain.handle('window:close', () => mainWindow?.close());
+
+// ── Performance monitor ────────────────────────────────────────────────────
+ipcMain.handle('perf:snapshot', async () => getSnapshot());
+ipcMain.handle('perf:kill',     async (_, pid) => killProcess(pid));
+
+// ── Privacy cleaner ────────────────────────────────────────────────────────
+ipcMain.handle('privacy:scan',  async () => scanPrivacy());
+ipcMain.handle('privacy:clear', async (_, opts) => clearPrivacy(opts));
+
+// ── Registry cleaner (Windows) ─────────────────────────────────────────────
+ipcMain.handle('registry:scan',    async () => scanRegistry());
+ipcMain.handle('registry:clean',   async (_, items) => cleanRegistry(items));
+ipcMain.handle('registry:backups', async () => listBackups());
+ipcMain.handle('registry:restore', async (_, file) => restoreBackup(file));
+
+// ── Disk health ────────────────────────────────────────────────────────────
+ipcMain.handle('disk:health',  async () => getDiskHealth());
+ipcMain.handle('disk:defrag-analyze', async () => analyzeDefrag());
+
+// ── Reports ────────────────────────────────────────────────────────────────
+ipcMain.handle('report:csv', async () => exportCSV());
+ipcMain.handle('report:pdf', async () => exportPDF());
+
+// ── Undo / deletion log ────────────────────────────────────────────────────
+ipcMain.handle('undo:list',  async () => listDeletions());
+ipcMain.handle('undo:clear', async () => { clearDeletions(); return { ok: true }; });

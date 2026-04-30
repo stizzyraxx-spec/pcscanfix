@@ -6,9 +6,10 @@ require('dotenv').config({ path: '.env.local' });
 const Stripe = require('stripe');
 
 const PRODUCT_NAME    = 'PCFixScan License';
-const PRODUCT_DESC    = 'Lifetime license — Mac & Windows';
-const PRICE_AMOUNT    = 1999;   // $19.99
+const PRODUCT_DESC    = 'Monthly subscription — Mac & Windows';
+const PRICE_AMOUNT    = 1999;   // $19.99/month
 const PRICE_CURRENCY  = 'usd';
+const RECURRING       = { interval: 'month', interval_count: 1 };
 
 (async () => {
   const sk = process.env.STRIPE_SECRET_KEY;
@@ -28,17 +29,22 @@ const PRICE_CURRENCY  = 'usd';
   }
 
   const prices = await stripe.prices.list({ product: product.id, active: true, limit: 5 });
-  let price = prices.data.find(p => p.unit_amount === PRICE_AMOUNT && p.currency === PRICE_CURRENCY && !p.recurring);
+  let price = prices.data.find(p =>
+    p.unit_amount === PRICE_AMOUNT &&
+    p.currency === PRICE_CURRENCY &&
+    p.recurring?.interval === RECURRING.interval
+  );
 
   if (!price) {
     price = await stripe.prices.create({
       product: product.id,
       unit_amount: PRICE_AMOUNT,
       currency: PRICE_CURRENCY,
+      recurring: RECURRING,
     });
-    console.log(`✓ Created price:      ${price.id}`);
+    console.log(`✓ Created subscription price: ${price.id}`);
   } else {
-    console.log(`→ Using existing price:   ${price.id}`);
+    console.log(`→ Using existing price:       ${price.id}`);
   }
 
   console.log('');

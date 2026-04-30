@@ -34,6 +34,19 @@ mac:
   gatekeeperAssess: false
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
+  extendInfo:
+    NSAppleEventsUsageDescription: >-
+      PCFixScan needs to communicate with Finder to move cleaned files
+      safely into the Trash (where you can recover them).
+    NSDesktopFolderUsageDescription: >-
+      PCFixScan needs Desktop access only when scanning Desktop for junk
+      files. You can review every match before cleaning.
+    NSDocumentsFolderUsageDescription: >-
+      PCFixScan needs Documents access only when scanning Documents for junk
+      files. You can review every match before cleaning.
+    NSDownloadsFolderUsageDescription: >-
+      PCFixScan needs Downloads access only when scanning Downloads for junk
+      files. You can review every match before cleaning.
   # Notarization runs automatically when CSC_LINK + APPLE_ID + APPLE_APP_SPECIFIC_PASSWORD
   # + APPLE_TEAM_ID are present in env. Leave commented until you have a Developer ID.
   # notarize:

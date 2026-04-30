@@ -5,8 +5,13 @@ const DEFAULT = {
   scanDepth: 4,
   excludePaths: '',
   trashMode: true,
-  autoScan: false,
-  autoScanInterval: 'weekly',
+  autoScan: true,                  // default ON — app runs in background and scans automatically
+  autoScanInterval: 'hourly',      // default frequent — junk piles up fast
+  advancedMode: false,             // gates registry/disk tools and Review/Advanced cleanup tiers
+  smartTriggerDisk: true,          // run a scan when disk free drops below the threshold
+  smartTriggerMemory: true,        // run a scan when memory usage spikes above the threshold
+  diskFreePctBelow: 15,
+  memoryPctAbove: 85,
 };
 
 export default function Settings() {
@@ -57,13 +62,39 @@ export default function Settings() {
           toggle('autoScan')
         )}
 
-        {s.autoScan && row('Scan Schedule', 'How often to run automatic scans',
+        {s.autoScan && row('Scan Schedule', 'How often the background daemon scans for junk',
           <select value={s.autoScanInterval} onChange={e => setS(p => ({ ...p, autoScanInterval: e.target.value }))}
             style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 10px', color: 'var(--text)' }}>
+            <option value="hourly">Every hour</option>
+            <option value="4hr">Every 4 hours</option>
             <option value="daily">Daily</option>
             <option value="weekly">Weekly</option>
             <option value="monthly">Monthly</option>
           </select>
+        )}
+
+        {s.autoScan && row('Smart Trigger: Low Disk', 'Auto-scan when free disk drops below this %',
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {toggle('smartTriggerDisk')}
+            <input type="number" value={s.diskFreePctBelow} min={5} max={50}
+              onChange={e => setS(p => ({ ...p, diskFreePctBelow: parseInt(e.target.value) || 15 }))}
+              style={{ width: 60, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 8px', color: 'var(--text)', textAlign: 'center' }} />
+            <span style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>%</span>
+          </div>
+        )}
+
+        {s.autoScan && row('Smart Trigger: High RAM', 'Auto-scan when memory usage exceeds this %',
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {toggle('smartTriggerMemory')}
+            <input type="number" value={s.memoryPctAbove} min={50} max={95}
+              onChange={e => setS(p => ({ ...p, memoryPctAbove: parseInt(e.target.value) || 85 }))}
+              style={{ width: 60, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 8px', color: 'var(--text)', textAlign: 'center' }} />
+            <span style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>%</span>
+          </div>
+        )}
+
+        {row('Advanced Mode', 'Reveals registry tools, disk health, and Review/Advanced-tier cleanup',
+          toggle('advancedMode')
         )}
 
         {row('Large File Threshold', 'Files bigger than this appear in the Large Files scan',

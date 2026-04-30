@@ -50,6 +50,8 @@ function ScoreRing({ score }) {
 
 export default function Dashboard({ scanResults, access }) {
   const [info, setInfo] = useState(null);
+  const [optimizing, setOptimizing] = useState(false);
+  const [optResult, setOptResult] = useState(null);
   const navigate = useNavigate();
   const showBanner = access && access.reason === 'trial';
   const licensed = access && (access.reason === 'admin' || access.reason === 'license');
@@ -57,6 +59,36 @@ export default function Dashboard({ scanResults, access }) {
   useEffect(() => {
     window.electronAPI?.getSystemInfo().then(setInfo).catch(() => {});
   }, []);
+
+  // One-click Optimize: scan junk + browser caches, then auto-clean only items tagged risk='safe'.
+  // Why "safe only": the spec forbids fake/aggressive cleanup; Review/Advanced items always require
+  // a human glance, so we surface them in /results with a CTA instead of deleting them silently.
+  async function oneClickOptimize() {
+    if (!window.electronAPI) return;
+    setOptimizing(true);
+    setOptResult(null);
+    try {
+      const results = await window.electronAPI.startScan({ categories: ['junk', 'browsers'] });
+      const safePaths = [];
+      let safeBytes = 0;
+      for (const j of results.junk || []) {
+        if (j.risk === 'safe') { safePaths.push(j.path); safeBytes += j.size || 0; }
+      }
+      for (const b of results.browsers || []) {
+        // Browser caches are always safe to delete (regenerate on next launch)
+        for (const f of b.files || []) safePaths.push(f);
+        safeBytes += b.size || 0;
+      }
+      if (!safePaths.length) {
+        setOptResult({ ok: 0, freed: 0, message: 'Nothing safe to clean — system is already tidy.' });
+      } else {
+        const r = await window.electronAPI.cleanFiles(safePaths, safeBytes);
+        setOptResult({ ok: r.success, blocked: r.blocked || 0, freed: safeBytes });
+      }
+    } finally {
+      setOptimizing(false);
+    }
+  }
 
   const totalJunk = scanResults
     ? [...(scanResults.junk || []), ...(scanResults.browsers || [])].reduce((s, f) => s + (f.size || 0), 0)
@@ -104,9 +136,21 @@ export default function Dashboard({ scanResults, access }) {
             <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: 12, lineHeight: 1.5 }}>
               {scanResults ? 'Based on last scan results' : 'Run a scan for accurate results'}
             </div>
-            <button className="btn btn-primary" onClick={() => navigate('/scanner')}>
-              {scanResults ? 'Run New Scan' : 'Start Scan'}
-            </button>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button className="btn btn-primary" disabled={optimizing} onClick={oneClickOptimize}>
+                {optimizing ? 'Optimizing…' : '⚡ One-Click Optimize'}
+              </button>
+              <button className="btn" onClick={() => navigate('/scanner')}>
+                {scanResults ? 'Run New Scan' : 'Start Scan'}
+              </button>
+            </div>
+            {optResult && (
+              <div style={{ marginTop: 10, fontSize: '0.78rem', color: 'var(--success)' }}>
+                {optResult.message
+                  || `Cleaned ${optResult.ok} item${optResult.ok === 1 ? '' : 's'} — freed ${fmt(optResult.freed)}.`}
+                {optResult.blocked > 0 && ` (${optResult.blocked} skipped by safety guard.)`}
+              </div>
+            )}
           </div>
         </div>
 

@@ -1,112 +1,65 @@
 import { NavLink } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { supabase, isAdminEmail } from '../lib/supabase.js';
 
-const ADMIN_EMAIL = 'admin@pcfixscan.com';
-const ADMIN_PASS  = 'ShaniyaK12!!';
+const isWin = (typeof navigator !== 'undefined' && /Win/i.test(navigator.platform));
 
 const NAV = [
   { to: '/dashboard', label: 'Dashboard' },
   { to: '/scanner', label: 'Scanner' },
   { to: '/results', label: 'Results' },
+  { to: '/performance', label: 'Performance' },
   { to: '/startup', label: 'Startup' },
+  { to: '/privacy-cleaner', label: 'Privacy' },
+  ...(isWin ? [{ to: '/registry', label: 'Registry' }] : []),
   { to: '/uninstaller', label: 'Uninstaller' },
   { to: '/history', label: 'History' },
   { to: '/settings', label: 'Settings' },
   { to: '/admin', label: 'Admin' },
 ];
 
-const isMac = window.electronAPI?.platform === 'darwin';
-
-function WinBtn({ label, onClick, danger }) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        width: 46,
-        height: 40,
-        background: 'none',
-        border: 'none',
-        cursor: 'pointer',
-        color: 'rgba(255,255,255,0.75)',
-        fontSize: danger ? '1rem' : '0.9rem',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        WebkitAppRegion: 'no-drag',
-        transition: 'background 0.1s',
-        fontFamily: 'Segoe MDL2 Assets, Segoe UI, sans-serif',
-      }}
-      onMouseEnter={e => e.currentTarget.style.background = danger ? '#c42b1c' : 'rgba(255,255,255,0.12)'}
-      onMouseLeave={e => e.currentTarget.style.background = 'none'}
-    >
-      {label}
-    </button>
-  );
-}
-
 export default function TopNav() {
-  const [isAdmin, setIsAdmin] = useState(() => !!sessionStorage.getItem('pcf_admin'));
+  // Real Supabase session — no client-side bypass
+  const [user, setUser]       = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [email, setEmail]   = useState('');
   const [pass, setPass]     = useState('');
   const [err, setErr]       = useState('');
 
-  function login(e) {
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setUser(data.user || null));
+    const { data: sub } = supabase.auth.onAuthStateChange((_, session) => setUser(session?.user || null));
+    return () => sub?.subscription?.unsubscribe?.();
+  }, []);
+
+  const isAdmin = user && isAdminEmail(user.email);
+
+  async function login(e) {
     e.preventDefault();
-    if (email === ADMIN_EMAIL && pass === ADMIN_PASS) {
-      sessionStorage.setItem('pcf_admin', '1');
-      setIsAdmin(true);
-      setShowModal(false);
-      setEmail(''); setPass(''); setErr('');
-    } else {
-      setErr('Invalid credentials');
+    setErr('');
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
+    if (error) { setErr(error.message); return; }
+    if (!isAdminEmail(data.user?.email)) {
+      await supabase.auth.signOut();
+      setErr('This account does not have admin privileges.');
+      return;
     }
+    setUser(data.user);
+    setShowModal(false);
+    setEmail(''); setPass(''); setErr('');
   }
 
-  function logout() {
-    sessionStorage.removeItem('pcf_admin');
-    setIsAdmin(false);
+  async function logout() {
+    await supabase.auth.signOut();
+    setUser(null);
   }
 
+  // The custom title bar (logo + brand + Windows controls) is gone — Electron now
+  // uses the OS-native title bar with traffic lights / min-max-close + "PCFixScan" title.
+  // Web renders the title in the browser tab. Both contexts get a clean menu strip below.
   return (
     <>
       <div style={s.shell}>
-        {/* Title bar */}
-        <div style={{ ...s.titleBar, position: 'relative' }}>
-          <div style={{ paddingLeft: isMac ? 72 : 14, display: 'flex', alignItems: 'center' }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style={s.logoMark}>
-              <rect x="1" y="2" width="22" height="14" rx="1.5" fill="#D4D0C8"/>
-              <rect x="2" y="2.5" width="20" height="1" rx="0.5" fill="#EEE8E0" opacity="0.8"/>
-              <rect x="3" y="4" width="18" height="10" fill="#001628"/>
-              <rect x="4.5" y="6"   width="13" height="1.2" rx="0.3" fill="#00DC3C" opacity="0.9"/>
-              <rect x="4.5" y="9.5" width="10" height="1.2" rx="0.3" fill="#00DC3C" opacity="0.9"/>
-              <rect x="15.5" y="9.5" width="1.5" height="1.2" fill="#00DC3C"/>
-              <circle cx="20.5" cy="15" r="0.9" fill="#00F050"/>
-              <rect x="10" y="16" width="4" height="3.5" fill="#B8B4AE"/>
-              <rect x="7" y="19.5" width="10" height="2" rx="0.5" fill="#C4C0BA"/>
-            </svg>
-          </div>
-
-          <span style={{
-            position: 'absolute',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            color: '#fff',
-            fontWeight: 600,
-            fontSize: '0.875rem',
-            pointerEvents: 'none',
-            whiteSpace: 'nowrap',
-          }}>PCFixScan</span>
-
-          {!isMac && (
-            <div style={{ display: 'flex', alignItems: 'stretch', height: '100%' }}>
-              <WinBtn label="─" onClick={() => window.electronAPI?.minimizeWindow()} />
-              <WinBtn label="□" onClick={() => window.electronAPI?.maximizeWindow()} />
-              <WinBtn label="✕" onClick={() => window.electronAPI?.closeWindow()} danger />
-            </div>
-          )}
-        </div>
-
         {/* Menu / nav strip */}
         <div style={s.menuBar}>
           <div style={{ display: 'flex', alignItems: 'stretch', flex: 1 }}>
@@ -119,15 +72,15 @@ export default function TopNav() {
             ))}
           </div>
 
-          {/* Login / Logout */}
+          {/* Login / Logout — admin only; customer uses license key, not login */}
           <div style={{ display: 'flex', alignItems: 'center', paddingRight: 8, gap: 6, WebkitAppRegion: 'no-drag' }}>
-            {isAdmin ? (
+            {user && isAdmin ? (
               <>
                 <span style={{ fontSize: '0.72rem', color: '#0078d4', fontWeight: 600 }}>Admin</span>
                 <button onClick={logout} style={s.authBtn}>Logout</button>
               </>
             ) : (
-              <button onClick={() => setShowModal(true)} style={s.authBtn}>Login</button>
+              <button onClick={() => setShowModal(true)} style={s.authBtn}>Admin</button>
             )}
           </div>
         </div>
@@ -172,18 +125,6 @@ export default function TopNav() {
 
 const s = {
   shell: {
-    flexShrink: 0,
-    WebkitAppRegion: 'drag',
-  },
-  titleBar: {
-    height: 40,
-    background: '#1a1a2e',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderBottom: '1px solid #0d0d1a',
-  },
-  logoMark: {
     flexShrink: 0,
   },
   menuBar: {

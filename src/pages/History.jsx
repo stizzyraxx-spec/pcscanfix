@@ -18,9 +18,28 @@ export default function History() {
     ]).then(([h, s]) => { setHistory(h || []); setStats(s); });
   }, []);
 
+  async function exportCSV() {
+    if (!window.electronAPI?.exportReportCSV) return;
+    const r = await window.electronAPI.exportReportCSV();
+    if (r?.ok) alert(`Saved to ${r.path}`);
+  }
+  async function exportPDF() {
+    if (!window.electronAPI?.exportReportPDF) return;
+    const r = await window.electronAPI.exportReportPDF();
+    if (r?.ok) alert(`Saved to ${r.path}`);
+  }
+
   return (
     <div>
-      <h1 className="page-title">Cleaning History</h1>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <h1 className="page-title" style={{ margin: 0 }}>Cleaning History</h1>
+        {window.electronAPI && (
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn" onClick={exportCSV}>Export CSV</button>
+            <button className="btn" onClick={exportPDF}>Export PDF</button>
+          </div>
+        )}
+      </div>
 
       {stats && (
         <div className="grid-4" style={{ marginBottom: 24 }}>

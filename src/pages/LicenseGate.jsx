@@ -1,21 +1,40 @@
 import { useState } from 'react';
-import { setStoredLicense, validateLicense, startCheckout, trialDaysRemaining } from '../utils/license.js';
+import { setStoredLicense, validateLicense, startCheckout } from '../utils/license.js';
 
-export default function LicenseGate({ trialExpired, onUnlock }) {
-  const [key, setKey]       = useState('');
-  const [busy, setBusy]     = useState(false);
-  const [err, setErr]       = useState('');
+const REASONS = {
+  no_license:       { title: 'Activate PCFixScan',          body: 'Enter your license key to start using the app.' },
+  expired:          { title: 'Subscription expired',        body: 'Your subscription has ended. Renew to continue.' },
+  past_due_expired: { title: 'Payment failed',              body: 'We were unable to charge your card. Update payment to restore access.' },
+  revoked:          { title: 'License revoked',             body: 'This license is no longer active. Contact support if you believe this is a mistake.' },
+  wrong_device:     { title: 'License in use elsewhere',    body: 'This license is already activated on another device. Contact support to transfer.' },
+  invalid:          { title: 'Activate PCFixScan',          body: 'Enter your license key to start using the app.' },
+  network_error:    { title: 'Couldn’t verify license', body: 'No internet connection. Reconnect and try again.' },
+};
+
+export default function LicenseGate({ reason = 'no_license', message, onUnlock }) {
+  const meta = REASONS[reason] || REASONS.no_license;
+
+  const [key, setKey]     = useState('');
+  const [busy, setBusy]   = useState(false);
+  const [err, setErr]     = useState('');
 
   async function activate(e) {
     e.preventDefault();
     setBusy(true); setErr('');
     const trimmed = key.trim().toUpperCase();
-    const ok = await validateLicense(trimmed);
-    if (ok) {
+    const r = await validateLicense(trimmed);
+    if (r.valid) {
       setStoredLicense(trimmed);
       onUnlock?.();
     } else {
-      setErr('That license key isn’t valid. Check your email or contact support.');
+      const map = {
+        not_found:   'That license key isn’t recognized.',
+        expired:     'This license has expired.',
+        revoked:     'This license has been revoked.',
+        wrong_device:'This license is bound to another device.',
+        past_due_expired: 'Subscription is past due. Update payment first.',
+      };
+      setErr(map[r.reason] || r.message || 'License could not be validated. Try again.');
     }
     setBusy(false);
   }
@@ -23,12 +42,8 @@ export default function LicenseGate({ trialExpired, onUnlock }) {
   return (
     <div style={s.page}>
       <div style={s.card}>
-        <h1 style={s.title}>{trialExpired ? 'Trial expired' : 'Activate PCFixScan'}</h1>
-        <p style={s.sub}>
-          {trialExpired
-            ? 'Your 7-day trial has ended. Enter a license key to continue, or purchase one below.'
-            : `Your trial has ${trialDaysRemaining()} day${trialDaysRemaining() === 1 ? '' : 's'} left. Activate any time.`}
-        </p>
+        <h1 style={s.title}>{meta.title}</h1>
+        <p style={s.sub}>{message || meta.body}</p>
 
         <form onSubmit={activate} style={{ marginTop: 20 }}>
           <label style={s.label}>License key</label>
@@ -47,9 +62,11 @@ export default function LicenseGate({ trialExpired, onUnlock }) {
 
         <div style={s.divider}>or</div>
 
-        <button onClick={startCheckout} style={s.buyBtn}>Buy a license — $19.99</button>
+        <button onClick={startCheckout} style={s.buyBtn}>Subscribe — $19.99/month</button>
 
-        <p style={s.foot}>Lost your key? Email support@pcfixscan.com with your purchase email.</p>
+        <p style={s.foot}>
+          Lost your key? Email <a href="mailto:support@pcfixscan.com" style={{ color: '#0078d4' }}>support@pcfixscan.com</a>.
+        </p>
       </div>
     </div>
   );
