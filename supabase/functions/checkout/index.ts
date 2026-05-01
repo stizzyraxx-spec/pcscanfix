@@ -11,8 +11,23 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
   if (!checkRateLimit(req, 'checkout', 10, 60_000)) return jsonResponse({ error: 'Too many checkout attempts' }, 429);
 
-  const priceId = Deno.env.get('STRIPE_PRICE_ID');
-  if (!priceId) return jsonResponse({ error: 'STRIPE_PRICE_ID not configured' }, 500);
+  // Tier → Stripe price ID. Falls back to the legacy single STRIPE_PRICE_ID when a
+  // tier-specific env var isn't set, so the flow stays live before all four
+  // per-tier prices have been provisioned in Stripe.
+  let tier = 'bundle';
+  try {
+    const body = await req.clone().json();
+    if (typeof body?.tier === 'string') tier = body.tier;
+  } catch {}
+  const tierEnvMap: Record<string, string> = {
+    cleaner:     'STRIPE_PRICE_ID_CLEANER',
+    privacy:     'STRIPE_PRICE_ID_PRIVACY',
+    performance: 'STRIPE_PRICE_ID_PERFORMANCE',
+    bundle:      'STRIPE_PRICE_ID_BUNDLE',
+  };
+  const priceId = Deno.env.get(tierEnvMap[tier] || 'STRIPE_PRICE_ID_BUNDLE')
+    || Deno.env.get('STRIPE_PRICE_ID');
+  if (!priceId) return jsonResponse({ error: 'No Stripe price configured' }, 500);
 
   const base = Deno.env.get('PUBLIC_URL') || 'https://pcfixscan.com';
 
@@ -40,8 +55,8 @@ Deno.serve(async (req) => {
       billing_address_collection: 'auto',
     };
     if (userEmail) params.customer_email = userEmail;
-    if (userId)    params.metadata = { user_id: userId };
-    if (userId)    params.subscription_data = { metadata: { user_id: userId } };
+    params.metadata = { tier, ...(userId ? { user_id: userId } : {}) };
+    params.subscription_data = { metadata: { tier, ...(userId ? { user_id: userId } : {}) } };
 
     const session = await stripe.checkout.sessions.create(params);
     return jsonResponse({ url: session.url });

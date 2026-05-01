@@ -67,14 +67,18 @@ export async function validateLicense(key) {
   }
 }
 
-export async function startCheckout() {
+export async function startCheckout(tier) {
   try {
     const { data: { session } } = await supabase.auth.getSession();
     const headers = {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
     };
-    const res  = await fetch(`${FUNCTIONS_URL}/checkout`, { method: 'POST', headers });
+    const res  = await fetch(`${FUNCTIONS_URL}/checkout`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ tier: tier || 'bundle' }),
+    });
     const data = await res.json();
     if (!data.url) throw new Error(data.error || 'No checkout URL');
 
