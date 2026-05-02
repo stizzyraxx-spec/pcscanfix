@@ -36,9 +36,9 @@ function createWindow() {
     backgroundColor: '#f3f3f3',
     title: 'PCFixScan',
     icon: path.join(__dirname, 'build', 'icon.png'),
-    // Native title bar — OS-standard close/min/max + drag region + app name.
-    // hiddenInset on Mac keeps the traffic lights but inset for a slightly cleaner look.
-    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    // Full native title bar so the user has an obvious drag handle and the
+    // page content never gets cut off behind the traffic lights.
+    titleBarStyle: 'default',
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,

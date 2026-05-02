@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import Paywall from '../components/Paywall.jsx';
 
 function fmt(bytes) {
   if (!bytes || bytes === 0) return '0 B';
@@ -64,11 +65,12 @@ function DupeGroup({ group, selected, onToggle }) {
   );
 }
 
-export default function Results({ scanResults }) {
+export default function Results({ scanResults, access, refreshAccess }) {
   const [tab, setTab] = useState('junk');
   const [selected, setSelected] = useState({});
   const [cleaning, setCleaning] = useState(false);
   const [done, setDone] = useState(null);
+  const [paywall, setPaywall] = useState(false);
   const navigate = useNavigate();
 
   // Auto-select junk and browser files when scan results arrive.
@@ -125,6 +127,7 @@ export default function Results({ scanResults }) {
 
   async function clean() {
     if (!selectedPaths.length) return;
+    if (!access?.unlocked) { setPaywall(true); return; }
     setCleaning(true);
     try {
       const result = await window.electronAPI.cleanFiles(selectedPaths, selectedSize);
@@ -133,6 +136,11 @@ export default function Results({ scanResults }) {
     } finally {
       setCleaning(false);
     }
+  }
+
+  async function onUnlocked() {
+    await refreshAccess?.();
+    setPaywall(false);
   }
 
   function renderList(items) {
@@ -158,10 +166,21 @@ export default function Results({ scanResults }) {
             <span style={{ color: 'var(--muted)', fontSize: '0.84rem' }}>{selectedPaths.length} selected · {fmt(selectedSize)} to free</span>
           )}
           <button className="btn btn-danger" onClick={clean} disabled={selectedPaths.length === 0 || cleaning}>
-            {cleaning ? 'Cleaning...' : `Clean (${selectedPaths.length})`}
+            {cleaning
+              ? 'Cleaning...'
+              : access?.unlocked
+                ? `Clean (${selectedPaths.length})`
+                : `🔒 Subscribe to clean (${selectedPaths.length})`}
           </button>
         </div>
       </div>
+
+      <Paywall
+        open={paywall}
+        onClose={() => setPaywall(false)}
+        onUnlocked={onUnlocked}
+        freedPreview={selectedSize ? fmt(selectedSize) : null}
+      />
 
       {done && (
         <div className="alert alert-success" style={{ marginBottom: 16 }}>

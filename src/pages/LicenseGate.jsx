@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { setStoredLicense, validateLicense, startCheckout } from '../utils/license.js';
 
 const REASONS = {
-  no_license:       { title: 'Activate PCFixScan',          body: 'Enter your license key to start using the app.' },
+  no_license:       { title: 'Subscribe to clean',          body: 'Scanning is free. Subscribe or activate a license to remove the items found.' },
   expired:          { title: 'Subscription expired',        body: 'Your subscription has ended. Renew to continue.' },
   past_due_expired: { title: 'Payment failed',              body: 'We were unable to charge your card. Update payment to restore access.' },
   revoked:          { title: 'License revoked',             body: 'This license is no longer active. Contact support if you believe this is a mistake.' },

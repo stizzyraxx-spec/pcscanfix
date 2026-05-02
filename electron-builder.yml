@@ -47,10 +47,10 @@ mac:
     NSDownloadsFolderUsageDescription: >-
       PCFixScan needs Downloads access only when scanning Downloads for junk
       files. You can review every match before cleaning.
-  # Notarization runs automatically when CSC_LINK + APPLE_ID + APPLE_APP_SPECIFIC_PASSWORD
-  # + APPLE_TEAM_ID are present in env. Leave commented until you have a Developer ID.
-  # notarize:
-  #   teamId: "${env.APPLE_TEAM_ID}"
+  # Notarization is OFF for local installs — Gatekeeper accepts signed apps from your own
+  # Developer ID on your own machine. Flip to true (and add APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD
+  # / APPLE_TEAM_ID env vars) before distributing to other users.
+  notarize: false
   target:
     - target: dmg
       arch: [x64, arm64]

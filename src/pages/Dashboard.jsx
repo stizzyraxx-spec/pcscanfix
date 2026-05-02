@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import Paywall from '../components/Paywall.jsx';
 
 function fmt(bytes) {
   if (!bytes) return '0 B';
@@ -48,13 +49,14 @@ function ScoreRing({ score }) {
   );
 }
 
-export default function Dashboard({ scanResults, access }) {
+export default function Dashboard({ scanResults, access, refreshAccess }) {
   const [info, setInfo] = useState(null);
   const [optimizing, setOptimizing] = useState(false);
   const [optResult, setOptResult] = useState(null);
+  const [paywall, setPaywall] = useState(false);
   const navigate = useNavigate();
-  const showBanner = access && access.reason === 'trial';
   const licensed = access && (access.reason === 'admin' || access.reason === 'license');
+  const unlocked = !!access?.unlocked;
 
   useEffect(() => {
     window.electronAPI?.getSystemInfo().then(setInfo).catch(() => {});
@@ -65,6 +67,7 @@ export default function Dashboard({ scanResults, access }) {
   // a human glance, so we surface them in /results with a CTA instead of deleting them silently.
   async function oneClickOptimize() {
     if (!window.electronAPI) return;
+    if (!unlocked) { setPaywall(true); return; }
     setOptimizing(true);
     setOptResult(null);
     try {
@@ -105,22 +108,36 @@ export default function Dashboard({ scanResults, access }) {
     <div>
       <h1 className="page-title">System Overview</h1>
 
-      {showBanner && (
-        <div style={{ background: 'linear-gradient(90deg, #0078d4, #005a9e)', borderRadius: 8, padding: '11px 20px', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#fff' }}>
-          <div>
-            <span style={{ fontWeight: 600, fontSize: '0.88rem' }}>
-              Trial — {access.daysLeft} day{access.daysLeft === 1 ? '' : 's'} left
-            </span>
-            <span style={{ fontSize: '0.8rem', marginLeft: 10, opacity: 0.85 }}>
-              Buy a license for unlimited scans and lifetime updates.
-            </span>
+      {!unlocked && (
+        <div style={{ background: 'linear-gradient(135deg, #eef4ff 0%, #e0ecff 100%)', border: '1px solid #c7d8ff', borderRadius: 10, padding: '16px 20px', marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#1b3a8a', marginBottom: 10 }}>
+            How PCFixScan works
           </div>
-          <button
-            onClick={() => window.electronAPI?.openURL('https://pcfixscan.com/buy') || navigate('/buy')}
-            style={{ background: '#fff', color: '#0078d4', border: 'none', borderRadius: 6, padding: '5px 16px', fontWeight: 600, cursor: 'pointer', fontSize: '0.8rem', flexShrink: 0, marginLeft: 16 }}
-          >
-            Buy — $19.99
-          </button>
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+            {[
+              { n: 1, t: 'Scan free', d: 'Run a scan from the Scanner tab — no card, no trial. See exactly what is wasting space.' },
+              { n: 2, t: 'Review results', d: 'Open Results to view junk, browser cache, duplicates, large files, and threats.' },
+              { n: 3, t: 'Subscribe to clean', d: 'Press Clean (or One-Click Optimize) and subscribe — $19.99/month, cancel anytime.' },
+            ].map(step => (
+              <div key={step.n} style={{ flex: '1 1 200px', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#0078d4', color: '#fff', fontWeight: 700, fontSize: '0.82rem', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  {step.n}
+                </div>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#1b3a8a' }}>{step.t}</div>
+                  <div style={{ fontSize: '0.78rem', color: '#3f4f7a', lineHeight: 1.45, marginTop: 2 }}>{step.d}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
+            <button onClick={() => navigate('/scanner')} style={{ background: '#0078d4', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 18px', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer' }}>
+              Start free scan
+            </button>
+            <button onClick={() => setPaywall(true)} style={{ background: '#fff', color: '#0078d4', border: '1px solid #0078d4', borderRadius: 6, padding: '8px 18px', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer' }}>
+              Subscribe — $19.99/month
+            </button>
+          </div>
         </div>
       )}
       {licensed && access.reason === 'license' && (
@@ -128,6 +145,12 @@ export default function Dashboard({ scanResults, access }) {
           ✓ Licensed — full version active
         </div>
       )}
+
+      <Paywall
+        open={paywall}
+        onClose={() => setPaywall(false)}
+        onUnlocked={async () => { await refreshAccess?.(); setPaywall(false); }}
+      />
 
       <div className="grid-2" style={{ marginBottom: 16 }}>
         <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 28 }}>
@@ -138,7 +161,7 @@ export default function Dashboard({ scanResults, access }) {
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <button className="btn btn-primary" disabled={optimizing} onClick={oneClickOptimize}>
-                {optimizing ? 'Optimizing…' : '⚡ One-Click Optimize'}
+                {optimizing ? 'Optimizing…' : unlocked ? '⚡ One-Click Optimize' : '🔒 One-Click Optimize'}
               </button>
               <button className="btn" onClick={() => navigate('/scanner')}>
                 {scanResults ? 'Run New Scan' : 'Start Scan'}

@@ -76,11 +76,10 @@ function AppInner({ scanResults, setScanResults, access, refreshAccess }) {
     );
   }
 
-  // Only prompt for a license on first launch (no license) or when the license
-  // has expired and needs renewal. Transient/non-explicit states (network_error,
-  // revoked, wrong_device, invalid, not_found) don't block the user.
-  // Why: prompting on every recheck or network blip annoys legitimate users.
-  const PROMPT_REASONS = new Set(['no_license', 'expired', 'past_due_expired']);
+  // Scanning is free; only block the app when a paying user's subscription has
+  // lapsed. First-launch (no_license) is handled inline by the Paywall on the
+  // Clean / One-Click Optimize actions instead of gating the whole app.
+  const PROMPT_REASONS = new Set(['expired', 'past_due_expired']);
   if (access && !access.unlocked && PROMPT_REASONS.has(access.reason)) {
     return <LicenseGate reason={access.reason} message={access.message} onUnlock={refreshAccess} />;
   }
@@ -91,9 +90,9 @@ function AppInner({ scanResults, setScanResults, access, refreshAccess }) {
       <main className="app-main">
         <Routes>
           <Route path="/"            element={<Navigate to={isElectron ? '/dashboard' : '/'} replace />} />
-          <Route path="/dashboard"   element={<Dashboard scanResults={scanResults} access={access} />} />
+          <Route path="/dashboard"   element={<Dashboard scanResults={scanResults} access={access} refreshAccess={refreshAccess} />} />
           <Route path="/scanner"     element={<Scanner onScanComplete={setScanResults} />} />
-          <Route path="/results"     element={<Results scanResults={scanResults} />} />
+          <Route path="/results"     element={<Results scanResults={scanResults} access={access} refreshAccess={refreshAccess} />} />
           <Route path="/startup"     element={<StartupManager />} />
           <Route path="/performance" element={<Performance />} />
           <Route path="/privacy-cleaner" element={<PrivacyCleaner />} />
